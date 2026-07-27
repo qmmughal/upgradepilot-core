@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/qmmughal/upgradepilot-core/actions/workflows/ci.yml/badge.svg)](https://github.com/qmmughal/upgradepilot-core/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Website](https://img.shields.io/badge/Website-upgradepilot.ai-0A66C2?style=flat)](https://upgradepilot.ai/)
 
 **AI-powered software modernization for .NET.** UpgradePilot is an open-source,
 multi-agent pipeline that automatically upgrades .NET applications — starting with
