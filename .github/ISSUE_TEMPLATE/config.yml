@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and discussion
+    url: https://github.com/qmmughal/upgradepilot-core/discussions
+    about: For questions and open-ended discussion, use Discussions instead of an issue.
+  - name: Security vulnerability
+    url: https://github.com/qmmughal/upgradepilot-core/security/advisories/new
+    about: Please report security vulnerabilities privately — see SECURITY.md.

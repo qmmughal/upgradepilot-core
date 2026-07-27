@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/UpgradePilot.Core.Agents.Discovery/UpgradePilot.Core.Agents.Discovery.csproj" />
+    <Project Path="src/UpgradePilot.Core.Agents.Pipeline/UpgradePilot.Core.Agents.Pipeline.csproj" />
+    <Project Path="src/UpgradePilot.Core.Domain/UpgradePilot.Core.Domain.csproj" />
+    <Project Path="src/UpgradePilot.Core.Mcp/UpgradePilot.Core.Mcp.csproj" />
+    <Project Path="src/UpgradePilot.Core.Orchestration/UpgradePilot.Core.Orchestration.csproj" />
+    <Project Path="src/UpgradePilot.Core.Persistence.Sqlite/UpgradePilot.Core.Persistence.Sqlite.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/UpgradePilot.Core.Agents.Discovery.Tests/UpgradePilot.Core.Agents.Discovery.Tests.csproj" />
+    <Project Path="tests/UpgradePilot.Core.Agents.Pipeline.Tests/UpgradePilot.Core.Agents.Pipeline.Tests.csproj" />
+    <Project Path="tests/UpgradePilot.Core.Domain.Tests/UpgradePilot.Core.Domain.Tests.csproj" />
+    <Project Path="tests/UpgradePilot.Core.Mcp.Tests/UpgradePilot.Core.Mcp.Tests.csproj" />
+    <Project Path="tests/UpgradePilot.Core.Orchestration.Tests/UpgradePilot.Core.Orchestration.Tests.csproj" />
+    <Project Path="tests/UpgradePilot.Core.Persistence.Sqlite.Tests/UpgradePilot.Core.Persistence.Sqlite.Tests.csproj" />
+  </Folder>
+</Solution>
