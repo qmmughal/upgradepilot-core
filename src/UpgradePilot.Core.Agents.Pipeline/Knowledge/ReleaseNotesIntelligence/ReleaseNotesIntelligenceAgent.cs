@@ -37,14 +37,16 @@ public sealed class ReleaseNotesIntelligenceAgent : IUpgradePilotAgent<ReleaseNo
             "gh", $"api \"repos/{input.Owner}/{input.Repo}/releases?per_page={input.MaxReleases}\"",
             Directory.GetCurrentDirectory(), cancellationToken);
 
-        if (run.ExitCode != 0)
+List<BreakingChangeLedgerItem>? items = run.ExitCode == 0 ? TryParseAndClassify(run.StandardOutput) : null;
+
+        if (items is null)
         {
             var empty = new BreakingChangeLedger([]);
+            var reason = run.ExitCode != 0 ? run.StandardError.Trim() : "response was not valid JSON";
             return AgentResult<BreakingChangeLedger>.Create(
-                empty, 0, $"Could not fetch releases for {input.Owner}/{input.Repo}: {run.StandardError.Trim()}");
+                empty, 0, $"Could not fetch releases for {input.Owner}/{input.Repo}: {reason}");
         }
 
-        var items = ParseAndClassify(run.StandardOutput);
         var ledger = new BreakingChangeLedger(items);
 
         context.RecordFact(AgentId, "breaking-change-ledger", ledger);
@@ -65,30 +67,43 @@ public sealed class ReleaseNotesIntelligenceAgent : IUpgradePilotAgent<ReleaseNo
             ? ValidationResult.Success()
             : ValidationResult.Failure("Every ledger item must cite a source release URL."));
 
-    private static List<BreakingChangeLedgerItem> ParseAndClassify(string releasesJson)
+    /// <summary>Null means "not parseable as the expected releases array" - distinct from a valid, empty result - so the caller can tell a real parse failure apart from "zero releases returned".</summary>
+    private static List<BreakingChangeLedgerItem>? TryParseAndClassify(string releasesJson)
     {
         var items = new List<BreakingChangeLedgerItem>();
 
-        using var doc = JsonDocument.Parse(releasesJson);
-        foreach (var release in doc.RootElement.EnumerateArray())
+        try
         {
-            var tag = release.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "unknown" : "unknown";
-            var url = release.TryGetProperty("html_url", out var u) ? u.GetString() ?? "" : "";
-            var body = release.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
-
-            foreach (var line in body.Split('\n'))
+            using var doc = JsonDocument.Parse(releasesJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
             {
-                var entry = line.Trim().TrimStart('-', '*', ' ');
-                if (entry.Length < 5)
-                {
-                    continue;
-                }
-
-                items.Add(new BreakingChangeLedgerItem(tag, entry, Classify(entry), url));
+                return null;
             }
-        }
 
-        return items;
+            foreach (var release in doc.RootElement.EnumerateArray())
+            {
+                var tag = release.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "unknown" : "unknown";
+                var url = release.TryGetProperty("html_url", out var u) ? u.GetString() ?? "" : "";
+                var body = release.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
+
+                foreach (var line in body.Split('\n'))
+                {
+                    var entry = line.Trim().TrimStart('-', '*', ' ');
+                    if (entry.Length < 5)
+                    {
+                        continue;
+                    }
+
+                    items.Add(new BreakingChangeLedgerItem(tag, entry, Classify(entry), url));
+                }
+            }
+
+            return items;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static ChangeCategory Classify(string entry)

@@ -52,7 +52,16 @@ public sealed class DependencyAnalyzerAgent : IUpgradePilotAgent<RepositoryMap, 
                 continue;
             }
 
-            resolvedProjects.Add(new ProjectDependencies(project.Name, packages));
+            var outdatedRun = await _processRunner.RunAsync(
+                "dotnet", $"list \"{project.ProjectFilePath}\" package --outdated --include-transitive --format json",
+                workingDirectory, cancellationToken);
+
+            var latestVersionsById = TryParseLatestVersions(outdatedRun.StandardOutput);
+            var packagesWithLatest = packages
+                .Select(p => latestVersionsById.TryGetValue(p.Id, out var latest) ? p with { LatestVersion = latest } : p)
+                .ToList();
+
+            resolvedProjects.Add(new ProjectDependencies(project.Name, packagesWithLatest));
 
             var vulnRun = await _processRunner.RunAsync(
                 "dotnet", $"list \"{project.ProjectFilePath}\" package --vulnerable --include-transitive --format json",
@@ -131,6 +140,59 @@ public sealed class DependencyAnalyzerAgent : IUpgradePilotAgent<RepositoryMap, 
             var version = pkg.TryGetProperty("resolvedVersion", out var rv) ? rv.GetString() ?? "unknown" : "unknown";
             into.Add(new PackageDependency(id, version, isDirect));
         }
+    }
+
+    /// <summary>`dotnet list package --outdated` only lists packages that DO have a newer version - absence from this map is itself the "already current" signal, not a gap.</summary>
+    private static Dictionary<string, string> TryParseLatestVersions(string json)
+    {
+        var latestVersionsById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("projects", out var projects) || projects.GetArrayLength() == 0)
+            {
+                return latestVersionsById;
+            }
+
+            var project = projects[0];
+            if (!project.TryGetProperty("frameworks", out var frameworks))
+            {
+                return latestVersionsById;
+            }
+
+            foreach (var framework in frameworks.EnumerateArray())
+            {
+                foreach (var propertyName in new[] { "topLevelPackages", "transitivePackages" })
+                {
+                    if (!framework.TryGetProperty(propertyName, out var array))
+                    {
+                        continue;
+                    }
+
+                    foreach (var pkg in array.EnumerateArray())
+                    {
+                        if (!pkg.TryGetProperty("latestVersion", out var latest))
+                        {
+                            continue;
+                        }
+
+                        var id = pkg.GetProperty("id").GetString();
+                        var latestVersion = latest.GetString();
+                        if (id is not null && latestVersion is not null)
+                        {
+                            latestVersionsById[id] = latestVersion;
+                        }
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // no outdated-package data available - not fatal, target versions simply stay unresolved
+        }
+
+        return latestVersionsById;
     }
 
     private static List<VulnerablePackage> TryParseVulnerabilities(string projectName, string json)

@@ -40,8 +40,12 @@ public sealed class FrameworkDetectorAgent : IUpgradePilotAgent<FrameworkDetecto
             .ToList();
 
         var hasAngular = _reader.EnumerateFiles(input.RepositoryMap.RootPath, "angular.json").Any();
+        var stackKind = DetectStackKind(input, classifications, hasAngular);
+        var nextJsRoutingMode = stackKind == StackKind.NextJs
+            ? DetectNextJsRoutingMode(input.RepositoryMap.RootPath)
+            : NextJsRoutingMode.Unknown;
 
-        var profile = new FrameworkProfile(classifications, hasAngular);
+        var profile = new FrameworkProfile(classifications, hasAngular, stackKind, nextJsRoutingMode);
         context.RecordFact(AgentId, "framework-profile", profile);
 
         var unclassifiedCount = classifications.Count(c => c.Framework == DetectedFramework.Unknown);
@@ -80,5 +84,88 @@ public sealed class FrameworkDetectorAgent : IUpgradePilotAgent<FrameworkDetecto
         return new FrameworkClassification(
             project.Name, DetectedFramework.Unknown, Confidence: 30,
             "No known ABP/AspNet Zero package signature found.");
+    }
+
+    private StackKind DetectStackKind(FrameworkDetectorInput input, IReadOnlyList<FrameworkClassification> classifications, bool hasAngular)
+    {
+        var hasDotNet = classifications.Any(c => c.Framework is DetectedFramework.AbpFrameworkLegacy or DetectedFramework.AbpFrameworkVNext)
+            || input.RepositoryMap.Projects.Any(p => p.ProjectFilePath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
+
+        var packageFiles = input.RepositoryMap.Projects
+            .Select(p => p.ProjectFilePath)
+            .Where(path => path.EndsWith("package.json", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (packageFiles.Count == 0 && input.RepositoryMap.RootPath is not null)
+        {
+            var rootPackage = _reader.EnumerateFiles(input.RepositoryMap.RootPath, "package.json").FirstOrDefault();
+            if (rootPackage is not null)
+            {
+                packageFiles.Add(rootPackage);
+            }
+        }
+
+        var hasJavaScriptApp = packageFiles.Count > 0
+            || hasAngular;
+
+        if (hasDotNet && hasJavaScriptApp)
+        {
+            return StackKind.Mixed;
+        }
+
+        if (hasDotNet)
+        {
+            return StackKind.DotNet;
+        }
+
+        foreach (var packageFile in packageFiles)
+        {
+            var contents = _reader.ReadAllText(packageFile);
+            if (contents.Contains("\"next\"", StringComparison.OrdinalIgnoreCase))
+            {
+                return StackKind.NextJs;
+            }
+
+            if (contents.Contains("\"react\"", StringComparison.OrdinalIgnoreCase)
+                || contents.Contains("\"react-dom\"", StringComparison.OrdinalIgnoreCase)
+                || hasAngular)
+            {
+                return StackKind.React;
+            }
+        }
+
+        if (hasAngular)
+        {
+            return StackKind.React;
+        }
+
+        return StackKind.Unknown;
+    }
+
+    /// <summary>
+    /// `layout.*` is required by every App Router route segment; `_app.*` is the Pages
+    /// Router's equivalent required file - both are reliable presence markers, unlike
+    /// inferring from directory names alone (a `pages/` directory can also just be a
+    /// component folder in an App Router project).
+    /// </summary>
+    private NextJsRoutingMode DetectNextJsRoutingMode(string? rootPath)
+    {
+        if (rootPath is null)
+        {
+            return NextJsRoutingMode.Unknown;
+        }
+
+        var hasAppRouter = new[] { "layout.tsx", "layout.jsx", "layout.js", "layout.ts" }
+            .Any(marker => _reader.EnumerateFiles(rootPath, marker).Any());
+        var hasPagesRouter = new[] { "_app.tsx", "_app.jsx", "_app.js", "_app.ts" }
+            .Any(marker => _reader.EnumerateFiles(rootPath, marker).Any());
+
+        return (hasAppRouter, hasPagesRouter) switch
+        {
+            (true, true) => NextJsRoutingMode.Both,
+            (true, false) => NextJsRoutingMode.App,
+            (false, true) => NextJsRoutingMode.Pages,
+            _ => NextJsRoutingMode.Unknown
+        };
     }
 }

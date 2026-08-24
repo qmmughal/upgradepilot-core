@@ -79,7 +79,26 @@ public sealed class UpgradePlannerAgent : IUpgradePilotAgent<UpgradePlanInput, U
         var completedAgentIds = context.Facts.Select(f => f.AgentId).ToHashSet();
         var remainingSteps = PipelineOrder.Where(id => !completedAgentIds.Contains(id)).ToList();
 
-        var plan = new UpgradePlan(remainingSteps, risks, confidence, RequiresHumanApproval: confidence < _approvalThreshold);
+        var stackKind = input.FrameworkProfile.StackKind;
+        var strategy = StackUpgradeStrategyCatalog.Resolve(stackKind);
+
+        var plan = new UpgradePlan(
+            remainingSteps,
+            risks,
+            confidence,
+            RequiresHumanApproval: confidence < _approvalThreshold,
+            StackKind: stackKind,
+            RecommendedUpgradePath: strategy.RecommendedUpgradePath);
+
+        plan = plan with
+        {
+            RemainingPipelineSteps = remainingSteps,
+            RiskRegister = risks,
+            ConfidenceScore = confidence,
+            RequiresHumanApproval = confidence < _approvalThreshold,
+            StackKind = stackKind,
+            RecommendedUpgradePath = strategy.RecommendedUpgradePath
+        };
         context.RecordFact(AgentId, "upgrade-plan", plan);
 
         var explanation = plan.RequiresHumanApproval
@@ -100,4 +119,5 @@ public sealed class UpgradePlannerAgent : IUpgradePilotAgent<UpgradePlanInput, U
         Task.FromResult(output.RiskRegister.All(r => !string.IsNullOrWhiteSpace(r.SourceAgentId))
             ? ValidationResult.Success()
             : ValidationResult.Failure("Every risk item must cite a source agent."));
+
 }

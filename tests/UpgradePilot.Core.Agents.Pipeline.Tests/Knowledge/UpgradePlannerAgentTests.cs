@@ -86,6 +86,59 @@ public class UpgradePlannerAgentTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_UsesStackSpecificUpgradePath_ForDotNetFrameworks()
+    {
+        var input = new UpgradePlanInput(
+            new RepositoryMap("/repo", [SampleProject]),
+            new VersionManifest([new FrameworkVersionSignal("Volo.Abp.AspNetCore.Mvc", "8.3.0", 100)]),
+            new FrameworkProfile([new FrameworkClassification("Sample.Web", DetectedFramework.AbpFrameworkVNext, 70, "matched")], false, StackKind.DotNet));
+
+        var agent = new UpgradePlannerAgent();
+        var context = new UpgradeContext(Guid.NewGuid());
+
+        var result = await agent.ExecuteAsync(input, context);
+
+        Assert.Equal(StackKind.DotNet, result.Output.StackKind);
+        Assert.Equal("dotnet-upgrade", result.Output.RecommendedUpgradePath);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UsesStackSpecificUpgradePath_ForReactAndNextJsFrameworks()
+    {
+        var reactInput = new UpgradePlanInput(
+            new RepositoryMap("/repo", [new ProjectInfo("frontend", "/repo/package.json", [])]),
+            new VersionManifest([]),
+            new FrameworkProfile([], false, StackKind.React));
+
+        var nextJsInput = new UpgradePlanInput(
+            new RepositoryMap("/repo", [new ProjectInfo("webapp", "/repo/package.json", [])]),
+            new VersionManifest([]),
+            new FrameworkProfile([], false, StackKind.NextJs));
+
+        var mixedInput = new UpgradePlanInput(
+            new RepositoryMap("/repo", [
+                new ProjectInfo("backend", "/repo/backend/backend.csproj", []),
+                new ProjectInfo("frontend", "/repo/package.json", [])
+            ]),
+            new VersionManifest([new FrameworkVersionSignal("Volo.Abp.AspNetCore.Mvc", "8.3.0", 100)]),
+            new FrameworkProfile([
+                new FrameworkClassification("backend", DetectedFramework.AbpFrameworkVNext, 70, "matched")
+            ], false, StackKind.Mixed));
+
+        var reactPlanner = new UpgradePlannerAgent();
+        var nextPlanner = new UpgradePlannerAgent();
+        var mixedPlanner = new UpgradePlannerAgent();
+
+        var reactResult = await reactPlanner.ExecuteAsync(reactInput, new UpgradeContext(Guid.NewGuid()));
+        var nextResult = await nextPlanner.ExecuteAsync(nextJsInput, new UpgradeContext(Guid.NewGuid()));
+        var mixedResult = await mixedPlanner.ExecuteAsync(mixedInput, new UpgradeContext(Guid.NewGuid()));
+
+        Assert.Equal("react-upgrade", reactResult.Output.RecommendedUpgradePath);
+        Assert.Equal("nextjs-upgrade", nextResult.Output.RecommendedUpgradePath);
+        Assert.Equal("mixed-upgrade", mixedResult.Output.RecommendedUpgradePath);
+    }
+
+    [Fact]
     public async Task ValidateAsync_Fails_WhenRiskItemMissingSourceAgent()
     {
         var agent = new UpgradePlannerAgent();

@@ -38,6 +38,9 @@ public class McpServerTests : IAsyncLifetime
         Assert.Contains("repo_grep", names);
         Assert.Contains("build_compile", names);
         Assert.Contains("test_run", names);
+        Assert.Contains("build_compileFrontend", names);
+        Assert.Contains("test_runFrontend", names);
+        Assert.Contains("build_npmInstall", names);
     }
 
     [Fact]

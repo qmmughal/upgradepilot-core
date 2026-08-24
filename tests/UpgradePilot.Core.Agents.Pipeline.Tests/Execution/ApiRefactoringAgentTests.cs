@@ -72,6 +72,36 @@ public class ApiRefactoringAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteAsync_WritesRefactoredSourceBackToDisk_WhenChangesWereMade()
+    {
+        await File.WriteAllTextAsync(_fixturePath, OriginalSource);
+
+        var agent = new ApiRefactoringAgent();
+        var context = new UpgradeContext(Guid.NewGuid());
+
+        await agent.ExecuteAsync(
+            new ApiRefactoringInput(_fixturePath, [new RenameRule("OldMethodName", "NewMethodName")]), context);
+
+        var savedContent = await File.ReadAllTextAsync(_fixturePath);
+        Assert.Contains("public string NewMethodName()", savedContent);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_LeavesFileUnchangedOnDisk_WhenRenameTargetNotFound()
+    {
+        await File.WriteAllTextAsync(_fixturePath, OriginalSource);
+
+        var agent = new ApiRefactoringAgent();
+        var context = new UpgradeContext(Guid.NewGuid());
+
+        await agent.ExecuteAsync(
+            new ApiRefactoringInput(_fixturePath, [new RenameRule("NoSuchMethod", "Whatever")]), context);
+
+        var savedContent = await File.ReadAllTextAsync(_fixturePath);
+        Assert.Equal(OriginalSource, savedContent);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ReportsZeroOccurrences_WhenRenameTargetNotFound()
     {
         await File.WriteAllTextAsync(_fixturePath, OriginalSource);

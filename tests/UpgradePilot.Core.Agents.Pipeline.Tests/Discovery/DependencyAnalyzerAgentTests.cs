@@ -67,6 +67,37 @@ public class DependencyAnalyzerAgentTests
         }
         """;
 
+    private const string NoOutdatedOutput = """
+        {
+          "version": 1,
+          "parameters": "--outdated --include-transitive",
+          "sources": [ "https://api.nuget.org/v3/index.json" ],
+          "projects": [
+            { "path": "/repo/Sample.Web/Sample.Web.csproj" }
+          ]
+        }
+        """;
+
+    private const string OutdatedOutput = """
+        {
+          "version": 1,
+          "parameters": "--outdated --include-transitive",
+          "projects": [
+            {
+              "path": "/repo/Sample.Web/Sample.Web.csproj",
+              "frameworks": [
+                {
+                  "framework": "net10.0",
+                  "topLevelPackages": [
+                    { "id": "Abp.AspNetCore", "requestedVersion": "9.2.0", "resolvedVersion": "9.2.0", "latestVersion": "9.3.1" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
     private static readonly RepositoryMap SampleMap = new(
         "/repo", [new ProjectInfo("Sample.Web", "/repo/Sample.Web/Sample.Web.csproj", [])]);
 
@@ -84,6 +115,7 @@ public class DependencyAnalyzerAgentTests
     {
         var runner = new SequencedProcessRunner(
             new ProcessRunResult(0, ListOutput, ""),
+            new ProcessRunResult(0, NoOutdatedOutput, ""),
             new ProcessRunResult(0, NoVulnerabilitiesOutput, ""));
         var agent = new DependencyAnalyzerAgent(runner);
         var context = new UpgradeContext(Guid.NewGuid());
@@ -102,6 +134,7 @@ public class DependencyAnalyzerAgentTests
     {
         var runner = new SequencedProcessRunner(
             new ProcessRunResult(0, ListOutput, ""),
+            new ProcessRunResult(0, NoOutdatedOutput, ""),
             new ProcessRunResult(0, VulnerableOutput, ""));
         var agent = new DependencyAnalyzerAgent(runner);
         var context = new UpgradeContext(Guid.NewGuid());
@@ -112,6 +145,26 @@ public class DependencyAnalyzerAgentTests
         Assert.Equal("Newtonsoft.Json", vuln.PackageId);
         Assert.Equal("High", vuln.Severity);
         Assert.Equal("Sample.Web", vuln.ProjectName);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PopulatesLatestVersion_ForOutdatedPackages()
+    {
+        var runner = new SequencedProcessRunner(
+            new ProcessRunResult(0, ListOutput, ""),
+            new ProcessRunResult(0, OutdatedOutput, ""),
+            new ProcessRunResult(0, NoVulnerabilitiesOutput, ""));
+        var agent = new DependencyAnalyzerAgent(runner);
+        var context = new UpgradeContext(Guid.NewGuid());
+
+        var result = await agent.ExecuteAsync(SampleMap, context);
+
+        var projectDeps = Assert.Single(result.Output.Graph.Projects);
+        var abp = Assert.Single(projectDeps.Packages, p => p.Id == "Abp.AspNetCore");
+        Assert.Equal("9.3.1", abp.LatestVersion);
+
+        var newtonsoft = Assert.Single(projectDeps.Packages, p => p.Id == "Newtonsoft.Json");
+        Assert.Null(newtonsoft.LatestVersion);
     }
 
     [Fact]

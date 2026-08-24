@@ -42,6 +42,11 @@ public sealed class ApiRefactoringAgent : IUpgradePilotAgent<ApiRefactoringInput
             .Where(c => c.OccurrencesReplaced > 0)
             .ToList();
 
+        if (changes.Count > 0)
+        {
+            File.WriteAllText(input.SourcePath, refactoredSource);
+        }
+
         var report = new RefactoringReport(refactoredSource, changes);
         context.RecordFact(AgentId, "refactoring-report", report);
 
