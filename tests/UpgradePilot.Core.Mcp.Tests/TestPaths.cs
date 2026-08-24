@@ -18,7 +18,12 @@ internal static class TestPaths
     public static string FindMcpServerDll()
     {
         var repoRoot = FindRepositoryRoot();
-        var dllPath = Path.Combine(repoRoot, "src", "UpgradePilot.Core.Mcp", "bin", "Debug", "net10.0", "UpgradePilot.Core.Mcp.dll");
+
+        // Match whatever configuration this test assembly itself was built as (Debug
+        // locally, Release in CI - see ci.yml) rather than hardcoding one, since the Mcp
+        // project is always built alongside the tests with the same configuration.
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
+        var dllPath = Path.Combine(repoRoot, "src", "UpgradePilot.Core.Mcp", "bin", configuration, "net10.0", "UpgradePilot.Core.Mcp.dll");
 
         if (!File.Exists(dllPath))
         {

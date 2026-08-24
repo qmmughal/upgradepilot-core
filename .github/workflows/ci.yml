@@ -25,8 +25,13 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef
+
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
       - name: Test
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: dotnet test --no-build --configuration Release --verbosity normal
